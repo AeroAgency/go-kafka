@@ -46,7 +46,7 @@ func (k KafkaConnector) GetConfigMap() *kafka.ConfigMap {
 		"sasl.mechanism":       KafkaSaslMechanism,
 		"group.id":             KafkaGroupId,
 		"auto.offset.reset":    "earliest",
-		"enable.auto.commit":   false,
+		//"enable.auto.commit":   false,
 	}
 	return &configMap
 }
