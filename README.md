@@ -33,3 +33,13 @@ KAFKA_TOPIC=consumerTopic
   `ctn, _ := registry.NewContainer()
   consumer := ctn.Resolve("sap_consumer").(*consumer.SapConsumer)
   consumer.KafkaConsumer.StartConsumer()`
+
+## Пример использования продюсера
+* Подключить KafkaProducer
+`func SomeService(
+) *SomeService {
+KafkaProducer:    producer.NewKafkaProducer(),
+}
+}`
+* Вызвать SendMessage
+`  s.KafkaProducer.SendMessage("MyTopic", myStruct)`
