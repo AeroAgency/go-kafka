@@ -21,7 +21,7 @@ func NewKafkaConsumer(message Message) *KafkaConsumer {
 		connector.KafkaConnector{},
 	}
 }
-func (k *KafkaConsumer) StartConsumer() {
+func (k *KafkaConsumer) StartConsumer(topic string) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap())
@@ -30,8 +30,7 @@ func (k *KafkaConsumer) StartConsumer() {
 		os.Exit(1)
 	}
 	log.Info("Created Consumer %v\n", c)
-	topic, ok := os.LookupEnv("KAFKA_TOPIC")
-	if !ok {
+	if topic == "" {
 		log.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
 	}
 	err = c.SubscribeTopics([]string{topic}, nil)

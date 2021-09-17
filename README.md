@@ -32,7 +32,7 @@ KAFKA_TOPIC=consumerTopic
 * Вызвать StartConsumer
   `ctn, _ := registry.NewContainer()
   consumer := ctn.Resolve("sap_consumer").(*consumer.SapConsumer)
-  consumer.KafkaConsumer.StartConsumer()`
+  consumer.KafkaConsumer.StartConsumer("topic_name")`
 
 ## Пример использования продюсера
 * Подключить KafkaProducer
