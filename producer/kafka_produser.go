@@ -36,7 +36,7 @@ func (k *KafkaProducer) SendMessage(topic string, value interface{}) {
 	k.SendRawMessage(topic, message)
 }
 
-func (k *KafkaProducer) SendRawMessage(topic string, message []byte) {
+func (k *KafkaProducer) SendRawMessage(topic string, message []byte) error {
 	p := k.CreateProducer()
 	deliveryChan := make(chan kafka.Event)
 	defer close(deliveryChan)
@@ -46,14 +46,18 @@ func (k *KafkaProducer) SendRawMessage(topic string, message []byte) {
 		Value:          message,
 		//Headers:        []kafka.Header{{Key: "myTestHeader", Value: []byte("header values are binary")}},
 	}, deliveryChan)
+
 	if err != nil {
 		log.Errorf("Kafka Producer: send message error: %s\n", err)
-		return
+		return err
 	}
 	e := <-deliveryChan
 	m := e.(*kafka.Message)
 
 	if m.TopicPartition.Error != nil {
 		log.Errorf("Kafka Producer: Delivery failed: %v\n", m.TopicPartition.Error)
+		return m.TopicPartition.Error
 	}
+
+	return nil
 }
