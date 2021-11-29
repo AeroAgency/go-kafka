@@ -19,6 +19,8 @@ KAFKA_GROUP_ID=consumerName
 
 KAFKA_TOPIC=consumerTopic
 
+KAFKA_MESSAGE_MAX_BYTES=1048576
+
 
 ## Пример использования консюмера
 
