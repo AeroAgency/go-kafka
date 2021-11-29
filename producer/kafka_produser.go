@@ -16,6 +16,7 @@ func NewKafkaProducer() *KafkaProducer {
 		connector.KafkaConnector{},
 	}
 }
+
 func (k *KafkaProducer) CreateProducer() *kafka.Producer {
 	p, err := kafka.NewProducer(k.KafkaConnector.GetConfigMap())
 	if err != nil {
@@ -27,27 +28,36 @@ func (k *KafkaProducer) CreateProducer() *kafka.Producer {
 }
 
 func (k *KafkaProducer) SendMessage(topic string, value interface{}) {
-	p := k.CreateProducer()
-	deliveryChan := make(chan kafka.Event)
-
 	message, err := json.Marshal(&value)
 	if err != nil {
 		log.Errorf("Kafka Producer: send message error: %s\n", err)
+		return
 	}
-	err = p.Produce(&kafka.Message{
+	k.SendRawMessage(topic, message)
+}
+
+func (k *KafkaProducer) SendRawMessage(topic string, message []byte) error {
+	p := k.CreateProducer()
+	deliveryChan := make(chan kafka.Event)
+	defer close(deliveryChan)
+
+	err := p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Value:          message,
 		//Headers:        []kafka.Header{{Key: "myTestHeader", Value: []byte("header values are binary")}},
 	}, deliveryChan)
+
 	if err != nil {
 		log.Errorf("Kafka Producer: send message error: %s\n", err)
+		return err
 	}
 	e := <-deliveryChan
 	m := e.(*kafka.Message)
 
 	if m.TopicPartition.Error != nil {
 		log.Errorf("Kafka Producer: Delivery failed: %v\n", m.TopicPartition.Error)
+		return m.TopicPartition.Error
 	}
 
-	close(deliveryChan)
+	return nil
 }
