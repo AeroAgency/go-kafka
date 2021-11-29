@@ -4,6 +4,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"strconv"
 )
 
 type KafkaConnector struct {
@@ -37,6 +38,14 @@ func (k KafkaConnector) GetConfigMap() *kafka.ConfigMap {
 	if !ok {
 		log.Fatalf("failed to connect kafka: can't get KAFKA_GROUP_ID param")
 	}
+	KafkaMaxMessageSize := 1048576
+	EnvKafkaMaxMessageSize, ok := os.LookupEnv("KAFKA_MESSAGE_MAX_BYTES")
+	if ok {
+		parseSize, err := strconv.Atoi(EnvKafkaMaxMessageSize)
+		if err == nil {
+			KafkaMaxMessageSize = parseSize
+		}
+	}
 
 	configMap := kafka.ConfigMap{
 		"metadata.broker.list": KafkaUrl,
@@ -46,6 +55,7 @@ func (k KafkaConnector) GetConfigMap() *kafka.ConfigMap {
 		"sasl.mechanism":       KafkaSaslMechanism,
 		"group.id":             KafkaGroupId,
 		"auto.offset.reset":    "earliest",
+		"message.max.bytes":    KafkaMaxMessageSize,
 		//"enable.auto.commit":   false,
 	}
 	return &configMap
