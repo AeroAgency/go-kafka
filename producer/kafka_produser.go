@@ -27,16 +27,17 @@ func (k *KafkaProducer) CreateProducer() *kafka.Producer {
 	return p
 }
 
-func (k *KafkaProducer) SendMessage(topic string, value interface{}) {
+func (k *KafkaProducer) SendMessage(topic string, value interface{}) error {
 	message, err := json.Marshal(&value)
 	if err != nil {
 		log.Errorf("Kafka Producer: send message error: %s\n", err)
-		return
+		return err
 	}
-	k.SendRawMessage(topic, message)
+
+	return k.SendRawMessage(topic, message, []kafka.Header{})
 }
 
-func (k *KafkaProducer) SendRawMessage(topic string, message []byte) error {
+func (k *KafkaProducer) SendRawMessage(topic string, message []byte, headers []kafka.Header) error {
 	p := k.CreateProducer()
 	deliveryChan := make(chan kafka.Event)
 	defer close(deliveryChan)
@@ -44,7 +45,7 @@ func (k *KafkaProducer) SendRawMessage(topic string, message []byte) error {
 	err := p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Value:          message,
-		//Headers:        []kafka.Header{{Key: "myTestHeader", Value: []byte("header values are binary")}},
+		Headers:        headers,
 	}, deliveryChan)
 
 	if err != nil {
