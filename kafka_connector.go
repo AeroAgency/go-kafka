@@ -56,6 +56,7 @@ func (k KafkaConnector) GetConfigMap() *kafka.ConfigMap {
 		"group.id":             KafkaGroupId,
 		"auto.offset.reset":    "earliest",
 		"message.max.bytes":    KafkaMaxMessageSize,
+		"max.poll.interval.ms": 6000000,
 		//"enable.auto.commit":   false,
 	}
 	return &configMap
