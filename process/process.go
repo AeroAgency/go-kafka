@@ -29,7 +29,7 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 		if !ok {
 			consumerHealthCheckPort = "8081"
 		}
-		r.Run(consumerHealthCheckPort)
+		r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
 	}()
 	for {
 		select {
