@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"fmt"
 	connector "github.com/AeroAgency/go-kafka"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
@@ -13,36 +12,42 @@ import (
 type KafkaConsumer struct {
 	Message        Message
 	KafkaConnector connector.KafkaConnector
+	Logger         log.FieldLogger
 }
 
 func NewKafkaConsumer(message Message) *KafkaConsumer {
 	return &KafkaConsumer{
 		message,
-		connector.KafkaConnector{},
+		*connector.NewKafkaConnector(),
+		log.New(),
 	}
 }
+
+func (k *KafkaConsumer) SetLogger(logger log.FieldLogger) {
+	k.Logger = logger
+	k.KafkaConnector.Logger = logger
+}
+
 func (k *KafkaConsumer) StartConsumer(topic string) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap())
+	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap(true))
 	if err != nil {
-		log.Fatalf("failed to start consumer: %v", err)
-		os.Exit(1)
+		k.Logger.Fatalf("failed to start consumer: %v", err)
 	}
-	log.Info("Created Consumer %v\n", c)
+	k.Logger.Infof("Created Consumer %v", c)
 	if topic == "" {
-		log.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
+		k.Logger.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
 	}
 	err = c.SubscribeTopics([]string{topic}, nil)
 	if err != nil {
-		log.Errorf("failed to subscribe topic: %v", err)
-		os.Exit(1)
+		k.Logger.Fatalf("failed to subscribe topic: %v", err)
 	}
 	run := true
 	for run == true {
 		select {
 		case sig := <-sigchan:
-			log.Info("Caught signal %v: terminating\n", sig)
+			k.Logger.Infof("Caught signal %v: terminating", sig)
 			run = false
 		default:
 			ev := c.Poll(100)
@@ -51,24 +56,22 @@ func (k *KafkaConsumer) StartConsumer(topic string) {
 			}
 			switch e := ev.(type) {
 			case *kafka.Message:
-				log.Info("%% Message on %s:\n%s\n",
-					e.TopicPartition, string(e.Value))
+				k.Logger.Infof("Message on topic %s, partition: %s: %s", topic, e.TopicPartition, string(e.Value))
 				if e.Headers != nil {
-					log.Info("%% Headers: %v\n", e.Headers)
+					k.Logger.Infof("Headers: %+v", e.Headers)
 				}
-				log.Info("Message on %s: %s", topic, e.TopicPartition)
 				k.Message.Handle(*e)
 			case kafka.Error:
-				fmt.Errorf("%% Error: %v: %v\n", e.Code(), e)
+				k.Logger.Errorf("Error: %+v", e)
 				if e.Code() == kafka.ErrAllBrokersDown {
 					run = false
 				}
 			default:
-				log.Info("Ignored %v\n", e)
+				k.Logger.Infof("Ignored %+v", e)
 			}
 		}
 	}
 
-	log.Info("Closing consumer\n")
-	c.Close()
+	k.Logger.Infof("Closing consumer %v", c)
+	_ = c.Close()
 }

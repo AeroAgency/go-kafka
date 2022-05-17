@@ -29,7 +29,7 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 		if !ok {
 			consumerHealthCheckPort = "8081"
 		}
-		r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
+		_ = r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
 	}()
 	for {
 		select {
@@ -45,6 +45,6 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 func RecoverRunProc(stop chan bool) {
 	if err := recover(); err != nil {
 		stop <- true
-		fmt.Println(fmt.Sprintf("process finished with error: %v", err))
+		fmt.Println(fmt.Sprintf("process finished with error: %+v", err))
 	}
 }

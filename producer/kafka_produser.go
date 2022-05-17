@@ -9,28 +9,34 @@ import (
 
 type KafkaProducer struct {
 	KafkaConnector connector.KafkaConnector
+	Logger         log.FieldLogger
 }
 
 func NewKafkaProducer() *KafkaProducer {
 	return &KafkaProducer{
-		connector.KafkaConnector{},
+		*connector.NewKafkaConnector(),
+		log.New(),
 	}
 }
 
+func (k *KafkaProducer) SetLogger(logger log.FieldLogger) {
+	k.Logger = logger
+	k.KafkaConnector.Logger = logger
+}
+
 func (k *KafkaProducer) CreateProducer() *kafka.Producer {
-	p, err := kafka.NewProducer(k.KafkaConnector.GetConfigMap())
+	p, err := kafka.NewProducer(k.KafkaConnector.GetConfigMap(false))
 	if err != nil {
-		log.Errorf("Kafka Producer: Failed to create producer: %s\n", err)
-		//os.Exit(1)
+		k.Logger.Errorf("Kafka Producer: Failed to create producer: %s", err)
 	}
-	log.Info("Kafka Producer: Created Producer %v\n", p)
+	k.Logger.Infof("Kafka Producer: Created Producer %v", p)
 	return p
 }
 
 func (k *KafkaProducer) SendMessage(topic string, value interface{}) error {
 	message, err := json.Marshal(&value)
 	if err != nil {
-		log.Errorf("Kafka Producer: send message error: %s\n", err)
+		k.Logger.Errorf("Kafka Producer: send message error: %s", err)
 		return err
 	}
 
@@ -49,14 +55,14 @@ func (k *KafkaProducer) SendRawMessage(topic string, message []byte, headers []k
 	}, deliveryChan)
 
 	if err != nil {
-		log.Errorf("Kafka Producer: send message error: %s\n", err)
+		k.Logger.Errorf("Kafka Producer: send message error: %s", err)
 		return err
 	}
 	e := <-deliveryChan
 	m := e.(*kafka.Message)
 
 	if m.TopicPartition.Error != nil {
-		log.Errorf("Kafka Producer: Delivery failed: %v\n", m.TopicPartition.Error)
+		k.Logger.Errorf("Kafka Producer: Delivery failed: %v", m.TopicPartition.Error)
 		return m.TopicPartition.Error
 	}
 
