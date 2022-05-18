@@ -27,7 +27,7 @@ func (k *KafkaProducer) SetLogger(logger log.FieldLogger) {
 func (k *KafkaProducer) CreateProducer() *kafka.Producer {
 	p, err := kafka.NewProducer(k.KafkaConnector.GetConfigMap(false))
 	if err != nil {
-		k.Logger.Errorf("Kafka Producer: Failed to create producer: %s", err)
+		k.Logger.Fatalf("Kafka Producer: Failed to create producer: %s", err)
 	}
 	k.Logger.Infof("Kafka Producer: Created Producer %v", p)
 	return p
@@ -47,6 +47,7 @@ func (k *KafkaProducer) SendRawMessage(topic string, message []byte, headers []k
 	p := k.CreateProducer()
 	deliveryChan := make(chan kafka.Event)
 	defer close(deliveryChan)
+	defer p.Close()
 
 	err := p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
