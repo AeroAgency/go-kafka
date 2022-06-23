@@ -96,3 +96,29 @@ func (k KafkaConnector) setConsumerConfigs(configMap *kafka.ConfigMap) {
 	}
 	_ = configMap.SetKey("max.poll.interval.ms", KafkaMaxPollIntervalMs)
 }
+
+func (k KafkaConnector) GetPollTimeoutMs() int {
+	timeoutMs := 100
+	EnvTimeoutMs, ok := os.LookupEnv("KAFKA_POLL_TIMEOUT_MS")
+	if ok {
+		parseTimeoutMs, err := strconv.Atoi(EnvTimeoutMs)
+		if err == nil {
+			timeoutMs = parseTimeoutMs
+		}
+	}
+
+	return timeoutMs
+}
+
+func (k KafkaConnector) GetMaxErrorsExitCount() int {
+	errorsExitCount := 0
+	EnvTimeoutMs, ok := os.LookupEnv("KAFKA_MAX_ERRORS_EXIT_COUNT")
+	if ok {
+		parseErrorsCount, err := strconv.Atoi(EnvTimeoutMs)
+		if err == nil {
+			errorsExitCount = parseErrorsCount
+		}
+	}
+
+	return errorsExitCount
+}

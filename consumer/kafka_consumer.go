@@ -44,27 +44,41 @@ func (k *KafkaConsumer) StartConsumer(topic string) {
 		k.Logger.Fatalf("failed to subscribe topic: %v", err)
 	}
 	run := true
+	timeoutMs := k.KafkaConnector.GetPollTimeoutMs()
+	errorsExitCntBase := k.KafkaConnector.GetMaxErrorsExitCount()
+	errorsExitCnt := errorsExitCntBase
+
 	for run == true {
 		select {
 		case sig := <-sigchan:
 			k.Logger.Infof("Caught signal %v: terminating", sig)
 			run = false
 		default:
-			ev := c.Poll(100)
+			ev := c.Poll(timeoutMs)
 			if ev == nil {
 				continue
 			}
 			switch e := ev.(type) {
 			case *kafka.Message:
+				errorsExitCnt = errorsExitCntBase
 				k.Logger.Infof("Message on topic %s, partition: %s: %s", topic, e.TopicPartition, string(e.Value))
 				if e.Headers != nil {
 					k.Logger.Infof("Headers: %+v", e.Headers)
 				}
 				k.Message.Handle(*e)
 			case kafka.Error:
-				k.Logger.Errorf("Error: %+v", e)
 				if e.Code() == kafka.ErrAllBrokersDown {
 					run = false
+				} else if errorsExitCntBase > 0 {
+					errorsExitCnt--
+					if errorsExitCnt == 0 {
+						run = false
+					}
+				}
+				if !run {
+					k.Logger.Errorf("Stop consuming with error: %+v", e)
+				} else {
+					k.Logger.Errorf("Continue consuming with error: %+v", e)
 				}
 			default:
 				k.Logger.Infof("Ignored %+v", e)
