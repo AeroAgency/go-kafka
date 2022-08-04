@@ -1,12 +1,14 @@
 package consumer
 
 import (
-	connector "github.com/AeroAgency/go-kafka"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/confluentinc/confluent-kafka-go/kafka"
+	log "github.com/sirupsen/logrus"
+
+	connector "github.com/AeroAgency/go-kafka"
 )
 
 type KafkaConsumer struct {
@@ -61,9 +63,9 @@ func (k *KafkaConsumer) StartConsumer(topic string) {
 			switch e := ev.(type) {
 			case *kafka.Message:
 				errorsExitCnt = errorsExitCntBase
-				k.Logger.Infof("Message on topic %s, partition: %s: %s", topic, e.TopicPartition, string(e.Value))
+				k.Logger.Debugf("Message on topic %s, partition: %s: %s", topic, e.TopicPartition, string(e.Value))
 				if e.Headers != nil {
-					k.Logger.Infof("Headers: %+v", e.Headers)
+					k.Logger.Debugf("Headers: %+v", e.Headers)
 				}
 				k.Message.Handle(*e)
 			case kafka.Error:
