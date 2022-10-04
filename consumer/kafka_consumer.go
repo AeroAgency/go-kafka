@@ -3,6 +3,7 @@ package consumer
 import (
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -30,7 +31,7 @@ func (k *KafkaConsumer) SetLogger(logger log.FieldLogger) {
 	k.KafkaConnector.Logger = logger
 }
 
-func (k *KafkaConsumer) StartConsumer(topic string) {
+func (k *KafkaConsumer) StartConsumer(topics ...string) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap(true))
@@ -38,10 +39,10 @@ func (k *KafkaConsumer) StartConsumer(topic string) {
 		k.Logger.Fatalf("failed to start consumer: %v", err)
 	}
 	k.Logger.Infof("Created Consumer %v", c)
-	if topic == "" {
+	if len(topics) == 0 {
 		k.Logger.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
 	}
-	err = c.SubscribeTopics([]string{topic}, nil)
+	err = c.SubscribeTopics(topics, nil)
 	if err != nil {
 		k.Logger.Fatalf("failed to subscribe topic: %v", err)
 	}
@@ -63,7 +64,7 @@ func (k *KafkaConsumer) StartConsumer(topic string) {
 			switch e := ev.(type) {
 			case *kafka.Message:
 				errorsExitCnt = errorsExitCntBase
-				k.Logger.Debugf("Message on topic %s, partition: %s: %s", topic, e.TopicPartition, string(e.Value))
+				k.Logger.Debugf("Message on topic %s, partition: %s: %s", strings.Join(topics, ", "), e.TopicPartition, string(e.Value))
 				if e.Headers != nil {
 					k.Logger.Debugf("Headers: %+v", e.Headers)
 				}
