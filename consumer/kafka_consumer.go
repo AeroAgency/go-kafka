@@ -92,3 +92,21 @@ func (k *KafkaConsumer) StartConsumer(topics ...string) {
 	k.Logger.Infof("Closing consumer %v", c)
 	_ = c.Close()
 }
+
+func (k *KafkaConsumer) CheckConsumer() (int, error) {
+	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap(true))
+	if err != nil {
+		k.Logger.Fatalf("failed to start consumer: %v", err)
+		return 0, err
+	}
+	metadata, err := c.GetMetadata(nil, true, 500)
+	topicLen := 0
+	if err != nil {
+		k.Logger.Fatalf("failed to subscribe topic: %v", err)
+	} else {
+		topicLen = len(metadata.Topics)
+	}
+
+	c.Close()
+	return topicLen, err
+}
