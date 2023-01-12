@@ -29,7 +29,7 @@ func (k *KafkaProducer) CreateProducer() *kafka.Producer {
 	if err != nil {
 		k.Logger.Fatalf("Kafka Producer: Failed to create producer: %s", err)
 	}
-	k.Logger.Infof("Kafka Producer: Created Producer %v", p)
+	k.Logger.Debugf("Kafka Producer: Created Producer %v", p)
 	return p
 }
 
