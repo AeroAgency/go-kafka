@@ -48,13 +48,13 @@ func (k KafkaConnector) getBaseMap() *kafka.ConfigMap {
 }
 
 func (k KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
-	KafkaUsername, userOk := os.LookupEnv("KAFKA_USER_NAME")
-	KafkaPassword, passwordOk := os.LookupEnv("KAFKA_PASSWORD")
-	if userOk || passwordOk {
-		if !userOk {
+	KafkaUsername, _ := os.LookupEnv("KAFKA_USER_NAME")
+	KafkaPassword, _ := os.LookupEnv("KAFKA_PASSWORD")
+	if KafkaUsername != "" || KafkaPassword != "" {
+		if KafkaUsername == "" {
 			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_USER_NAME param")
 		}
-		if !passwordOk {
+		if KafkaPassword == "" {
 			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_PASSWORD param")
 		}
 		KafkaSecurityProtocol, ok := os.LookupEnv("KAFKA_SECURITY_PROTOCOL")
