@@ -42,7 +42,22 @@ func (k *KafkaConsumer) StartConsumer(topics ...string) {
 	if len(topics) == 0 {
 		k.Logger.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
 	}
-	err = c.SubscribeTopics(topics, nil)
+
+	var rebalanceCb func(c *kafka.Consumer, e kafka.Event) error
+	rebalanceCb = func(c *kafka.Consumer, e kafka.Event) error {
+		k.Logger.Infof("Got kafka partition rebalance event %s in %s consumer", e.String(), c.String())
+		switch e.(type) {
+		case kafka.RevokedPartitions:
+			// Resubscribe to the topic to get new partitions assigned.
+			err := c.SubscribeTopics(topics, rebalanceCb)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	err = c.SubscribeTopics(topics, rebalanceCb)
 	if err != nil {
 		k.Logger.Fatalf("failed to subscribe topic: %v", err)
 	}
