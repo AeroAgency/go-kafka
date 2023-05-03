@@ -31,6 +31,13 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 		}
 		_ = r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
 	}()
+
+	consumerHealthCheckTimeout, ok := os.LookupEnv("CONSUMER_HEALTH_CHECK_TIMEOUT_MS")
+	if !ok {
+		consumerHealthCheckTimeout = "2000"
+	}
+	consumerHealthCheckTimeoutMs, _ := strconv.Atoi(consumerHealthCheckTimeout)
+
 	for {
 		select {
 		case <-stop:
@@ -38,7 +45,7 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 			fmt.Println("stopped")
 			return
 		default:
-			// …
+			time.Sleep(time.Millisecond * time.Duration(consumerHealthCheckTimeoutMs))
 		}
 	}
 }
