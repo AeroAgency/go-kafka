@@ -70,19 +70,18 @@ func (k *KafkaProducer) SendRawMessage(topic string, message []byte, headers []k
 	return nil
 }
 
-func (k *KafkaProducer) SendRawWithKeyMessage(topic string, key []byte, message []byte, headers []kafka.Header) error {
+func (k *KafkaProducer) SendRawMsg(topic string, key []byte, partition int32, message []byte, headers []kafka.Header) error {
 	p := k.CreateProducer()
 	deliveryChan := make(chan kafka.Event)
 	defer close(deliveryChan)
 	defer p.Close()
 
 	err := p.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: partition},
 		Key:            key,
 		Value:          message,
 		Headers:        headers,
 	}, deliveryChan)
-
 	if err != nil {
 		k.Logger.Errorf("Kafka Producer: send message error: %s", err)
 		return err
