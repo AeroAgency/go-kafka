@@ -1,11 +1,36 @@
 package connector
 
 import (
+	"github.com/AeroAgency/go-kafka/env"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"strconv"
 )
+
+const (
+	kafkaUrlEnv               = "KAFKA_URL"
+	kafkaSecurityProtocolEnv  = "KAFKA_SECURITY_PROTOCOL"
+	kafkaSaslMechanismEnv     = "KAFKA_SASL_MECHANISM"
+	kafkaUsernameEnv          = "KAFKA_USERNAME"
+	kafkaPasswordEnv          = "KAFKA_PASSWORD"
+	kafkaGroupIdEnv           = "KAFKA_GROUP_ID"
+	kafkaMaxMessageSizeEnv    = "KAFKA_MESSAGE_MAX_BYTES"
+	kafkaAutoOffsetResetEnv   = "KAFKA_AUTO_OFFSET_RESET"
+	kafkaMaxPollIntervalMsEnv = "KAFKA_MAX_POLL_INTERVAL_MS"
+	TimeoutMsEnv              = "KAFKA_POLL_TIMEOUT_MS"
+	ErrorsExitCountEnv        = "KAFKA_MAX_ERRORS_EXIT_COUNT"
+)
+
+const (
+	defaultKafkaMaxMessageSize    = 1048576
+	defaultKafkaAutoOffsetReset   = "earliest"
+	defaultKafkaMaxPollIntervalMs = 6000000
+	defaultTimeoutMs              = 100
+	defaultErrorsExitCount        = 0
+)
+
+const getEnvErrorLog = "failed to connect kafka: can't get %s param"
+
+//todo: throw errors and handle them at upper level? it will change contract
 
 type KafkaConnector struct {
 	Logger log.FieldLogger
@@ -17,7 +42,12 @@ func NewKafkaConnector() *KafkaConnector {
 	}
 }
 
-func (k KafkaConnector) GetConfigMap(forConsumer bool) *kafka.ConfigMap {
+func (k *KafkaConnector) SetLogger(logger log.FieldLogger) {
+	k.Logger = logger
+}
+
+// Deprecated: GetConfigMap
+func (k *KafkaConnector) GetConfigMap(forConsumer bool) *kafka.ConfigMap {
 	configMap := k.getBaseMap()
 	k.setSecurityConfigs(configMap)
 	if forConsumer {
@@ -27,19 +57,26 @@ func (k KafkaConnector) GetConfigMap(forConsumer bool) *kafka.ConfigMap {
 	return configMap
 }
 
-func (k KafkaConnector) getBaseMap() *kafka.ConfigMap {
-	KafkaUrl, ok := os.LookupEnv("KAFKA_URL")
-	if !ok {
-		k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_URL param")
+func (k *KafkaConnector) GetConsumerConfigMap() *kafka.ConfigMap {
+	configMap := k.getWithSecurityConfigMap()
+	k.setConsumerConfigs(configMap)
+
+	return configMap
+}
+
+func (k *KafkaConnector) GetProducerConfigMap() *kafka.ConfigMap {
+	configMap := k.getWithSecurityConfigMap()
+
+	return configMap
+}
+
+func (k *KafkaConnector) getBaseMap() *kafka.ConfigMap {
+	KafkaUrl := env.GetStringOrDefault(kafkaUrlEnv, "")
+	if KafkaUrl == "" {
+		k.Logger.Fatalf(getEnvErrorLog, kafkaUrlEnv)
 	}
-	KafkaMaxMessageSize := 1048576
-	EnvKafkaMaxMessageSize, ok := os.LookupEnv("KAFKA_MESSAGE_MAX_BYTES")
-	if ok {
-		parseSize, err := strconv.Atoi(EnvKafkaMaxMessageSize)
-		if err == nil {
-			KafkaMaxMessageSize = parseSize
-		}
-	}
+
+	KafkaMaxMessageSize := env.GetIntOrDefault(kafkaMaxMessageSizeEnv, defaultKafkaMaxMessageSize)
 
 	return &kafka.ConfigMap{
 		"metadata.broker.list": KafkaUrl,
@@ -47,24 +84,35 @@ func (k KafkaConnector) getBaseMap() *kafka.ConfigMap {
 	}
 }
 
-func (k KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
-	KafkaUsername, _ := os.LookupEnv("KAFKA_USER_NAME")
-	KafkaPassword, _ := os.LookupEnv("KAFKA_PASSWORD")
+func (k *KafkaConnector) getWithSecurityConfigMap() *kafka.ConfigMap {
+	configMap := k.getBaseMap()
+	k.setSecurityConfigs(configMap)
+
+	return configMap
+}
+
+func (k *KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
+	KafkaUsername := env.GetStringOrDefault(kafkaUsernameEnv, "")
+	KafkaPassword := env.GetStringOrDefault(kafkaPasswordEnv, "")
+
 	if KafkaUsername != "" || KafkaPassword != "" {
 		if KafkaUsername == "" {
-			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_USER_NAME param")
+			k.Logger.Fatalf(getEnvErrorLog, kafkaUsernameEnv)
 		}
 		if KafkaPassword == "" {
-			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_PASSWORD param")
+			k.Logger.Fatalf(getEnvErrorLog, kafkaPasswordEnv)
 		}
-		KafkaSecurityProtocol, ok := os.LookupEnv("KAFKA_SECURITY_PROTOCOL")
-		if !ok {
-			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_SECURITY_PROTOCOL param")
+
+		KafkaSecurityProtocol := env.GetStringOrDefault(kafkaSecurityProtocolEnv, "")
+		if KafkaSecurityProtocol == "" {
+			k.Logger.Fatalf(getEnvErrorLog, kafkaSecurityProtocolEnv)
 		}
-		KafkaSaslMechanism, ok := os.LookupEnv("KAFKA_SASL_MECHANISM")
-		if !ok {
-			k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_SASL_MECHANISM param")
+
+		KafkaSaslMechanism := env.GetStringOrDefault(kafkaSaslMechanismEnv, "")
+		if KafkaSaslMechanism == "" {
+			k.Logger.Fatalf(getEnvErrorLog, kafkaSaslMechanismEnv)
 		}
+
 		_ = configMap.SetKey("security.protocol", KafkaSecurityProtocol)
 		_ = configMap.SetKey("sasl.username", KafkaUsername)
 		_ = configMap.SetKey("sasl.password", KafkaPassword)
@@ -72,53 +120,28 @@ func (k KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
 	}
 }
 
-func (k KafkaConnector) setConsumerConfigs(configMap *kafka.ConfigMap) {
-	KafkaGroupId, ok := os.LookupEnv("KAFKA_GROUP_ID")
-	if !ok {
-		k.Logger.Fatalf("failed to connect kafka: can't get KAFKA_GROUP_ID param")
+func (k *KafkaConnector) setConsumerConfigs(configMap *kafka.ConfigMap) {
+	KafkaGroupId := env.GetStringOrDefault(kafkaGroupIdEnv, "")
+	if KafkaGroupId == "" {
+		k.Logger.Fatalf(getEnvErrorLog, kafkaGroupIdEnv)
 	}
-	_ = configMap.SetKey("group.id", KafkaGroupId)
 
-	KafkaAutoOffsetReset := "earliest"
-	EnvKafkaAutoOffsetReset, ok := os.LookupEnv("KAFKA_AUTO_OFFSET_RESET")
-	if ok {
-		KafkaAutoOffsetReset = EnvKafkaAutoOffsetReset
-	}
+	KafkaAutoOffsetReset := env.GetStringOrDefault(kafkaAutoOffsetResetEnv, defaultKafkaAutoOffsetReset)
+	KafkaMaxPollIntervalMs := env.GetIntOrDefault(kafkaMaxPollIntervalMsEnv, defaultKafkaMaxPollIntervalMs)
+
 	_ = configMap.SetKey("auto.offset.reset", KafkaAutoOffsetReset)
-
-	KafkaMaxPollIntervalMs := 6000000
-	EnvKafkaMaxPollIntervalMs, ok := os.LookupEnv("KAFKA_MAX_POLL_INTERVAL_MS")
-	if ok {
-		parseSize, err := strconv.Atoi(EnvKafkaMaxPollIntervalMs)
-		if err == nil {
-			KafkaMaxPollIntervalMs = parseSize
-		}
-	}
+	_ = configMap.SetKey("group.id", KafkaGroupId)
 	_ = configMap.SetKey("max.poll.interval.ms", KafkaMaxPollIntervalMs)
 }
 
-func (k KafkaConnector) GetPollTimeoutMs() int {
-	timeoutMs := 100
-	EnvTimeoutMs, ok := os.LookupEnv("KAFKA_POLL_TIMEOUT_MS")
-	if ok {
-		parseTimeoutMs, err := strconv.Atoi(EnvTimeoutMs)
-		if err == nil {
-			timeoutMs = parseTimeoutMs
-		}
-	}
+func (k *KafkaConnector) GetPollTimeoutMs() int {
+	timeoutMs := env.GetIntOrDefault(TimeoutMsEnv, defaultTimeoutMs)
 
 	return timeoutMs
 }
 
-func (k KafkaConnector) GetMaxErrorsExitCount() int {
-	errorsExitCount := 0
-	EnvTimeoutMs, ok := os.LookupEnv("KAFKA_MAX_ERRORS_EXIT_COUNT")
-	if ok {
-		parseErrorsCount, err := strconv.Atoi(EnvTimeoutMs)
-		if err == nil {
-			errorsExitCount = parseErrorsCount
-		}
-	}
+func (k *KafkaConnector) GetMaxErrorsExitCount() int {
+	errorsExitCount := env.GetIntOrDefault(ErrorsExitCountEnv, defaultErrorsExitCount)
 
 	return errorsExitCount
 }
