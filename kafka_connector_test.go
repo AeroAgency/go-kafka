@@ -551,7 +551,7 @@ func TestKafkaConnector_GetMaxErrorsExitCount(t *testing.T) {
 			name: "Get",
 			want: maxErrorsExitCount,
 			setEnv: func(t *testing.T) {
-				t.Setenv(ErrorsExitCountEnv, strconv.Itoa(maxErrorsExitCount))
+				t.Setenv(kafkaErrorsExitCountEnv, strconv.Itoa(maxErrorsExitCount))
 			},
 		},
 		{
@@ -586,7 +586,7 @@ func TestKafkaConnector_GetPollTimeoutMs(t *testing.T) {
 			name: "Get",
 			want: pollTimeoutMs,
 			setEnv: func(t *testing.T) {
-				t.Setenv(TimeoutMsEnv, strconv.Itoa(pollTimeoutMs))
+				t.Setenv(kafkaTimeoutMsEnv, strconv.Itoa(pollTimeoutMs))
 			},
 		},
 		{
@@ -617,4 +617,9 @@ func TestKafkaConnector_SetLogger(t *testing.T) {
 	connector.SetLogger(logger)
 
 	assert.Equal(t, connector.Logger, logger)
+}
+
+func TestNewKafkaConnector(t *testing.T) {
+	connector := NewKafkaConnector()
+	assert.NotNil(t, connector)
 }

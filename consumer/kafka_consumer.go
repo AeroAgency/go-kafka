@@ -1,8 +1,8 @@
 package consumer
 
 import (
-	"github.com/AeroAgency/go-kafka/adapter"
-	"github.com/AeroAgency/go-kafka/adapter/confluent"
+	"github.com/AeroAgency/go-kafka/adapters"
+	"github.com/AeroAgency/go-kafka/adapters/confluent"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -30,7 +30,7 @@ type KafkaConnector interface {
 
 //go:generate go run github.com/vektra/mockery/v2 --name KafkaConsumerFactory
 type KafkaConsumerFactory interface {
-	NewConsumer(configMap *kafka.ConfigMap) (adapter.Consumer, error)
+	NewConsumer(configMap *kafka.ConfigMap) (adapters.Consumer, error)
 }
 
 type KafkaConsumer struct {
@@ -66,8 +66,8 @@ func (k *KafkaConsumer) StartConsumer(topics ...string) {
 		k.Logger.Fatalf("failed to start consumer: no topics provided")
 	}
 
-	var rebalanceCb func(c *kafka.Consumer, e kafka.Event) error
-	rebalanceCb = func(c *kafka.Consumer, e kafka.Event) error {
+	var rebalanceCb func(c adapters.Consumer, e kafka.Event) error
+	rebalanceCb = func(c adapters.Consumer, e kafka.Event) error {
 		k.Logger.Infof("Got kafka partition rebalance event %s in %s consumer", e.String(), c.String())
 		switch e.(type) {
 		case kafka.RevokedPartitions:
@@ -158,9 +158,6 @@ func (k *KafkaConsumer) CheckConsumer() (int, error) {
 		topicLen = len(metadata.Topics)
 	}
 
-	err = c.Close()
-	if err != nil {
-		return 0, err
-	}
-	return topicLen, err
+	c.Close()
+	return topicLen, nil
 }

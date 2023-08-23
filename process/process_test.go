@@ -102,3 +102,15 @@ func TestRunRest(t *testing.T) {
 
 	assert.Equal(t, expectedResponse, actualResponse)
 }
+
+func TestRecoverRunProc(t *testing.T) {
+	stop := make(chan bool)
+	go testRecoverRunProc(stop)
+	v := <-stop
+	assert.True(t, v)
+}
+
+func testRecoverRunProc(stop chan bool) {
+	defer RecoverRunProc(stop)
+	panic("")
+}

@@ -3,8 +3,8 @@ package producer
 import (
 	"encoding/json"
 	connector "github.com/AeroAgency/go-kafka"
-	"github.com/AeroAgency/go-kafka/adapter"
-	"github.com/AeroAgency/go-kafka/adapter/confluent"
+	"github.com/AeroAgency/go-kafka/adapters"
+	"github.com/AeroAgency/go-kafka/adapters/confluent"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
 )
@@ -17,7 +17,7 @@ type KafkaConnector interface {
 
 //go:generate go run github.com/vektra/mockery/v2 --name KafkaProducerFactory
 type KafkaProducerFactory interface {
-	NewProducer(configMap *kafka.ConfigMap) (adapter.Producer, error)
+	NewProducer(configMap *kafka.ConfigMap) (adapters.Producer, error)
 }
 
 type KafkaProducer struct {
@@ -39,7 +39,7 @@ func (k *KafkaProducer) SetLogger(logger log.FieldLogger) {
 	k.KafkaConnector.SetLogger(logger)
 }
 
-func (k *KafkaProducer) CreateProducer() adapter.Producer {
+func (k *KafkaProducer) CreateProducer() adapters.Producer {
 	p, err := k.factory.NewProducer(k.KafkaConnector.GetProducerConfigMap())
 	if err != nil {
 		k.Logger.Fatalf("Kafka Producer: Failed to create producer: %s", err)

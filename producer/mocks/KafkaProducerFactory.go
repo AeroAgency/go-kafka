@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	adapter "github.com/AeroAgency/go-kafka/adapter"
+	adapter "github.com/AeroAgency/go-kafka/adapters"
 	kafka "github.com/confluentinc/confluent-kafka-go/kafka"
 
 	mock "github.com/stretchr/testify/mock"

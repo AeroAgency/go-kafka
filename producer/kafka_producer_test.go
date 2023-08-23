@@ -2,7 +2,7 @@ package producer
 
 import (
 	"encoding/json"
-	adapterMocks "github.com/AeroAgency/go-kafka/adapter/mocks"
+	adapterMocks "github.com/AeroAgency/go-kafka/adapters/mocks"
 	producerMocks "github.com/AeroAgency/go-kafka/producer/mocks"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -242,6 +242,145 @@ func TestKafkaProducer_SendMessage(t *testing.T) {
 	}
 }
 
+func TestKafkaProducer_SendRawMsg(t *testing.T) {
+	type m struct {
+		producer  *adapterMocks.Producer
+		factory   *producerMocks.KafkaProducerFactory
+		connector *producerMocks.KafkaConnector
+	}
+	configMap := &kafka.ConfigMap{
+		"socket.timeout.ms":         100,
+		"message.timeout.ms":        100,
+		"go.delivery.report.fields": "key,value,headers",
+	}
+	testTopic := "gotest"
+	_ = "gotest_topic_error"
+
+	validMessage := []byte("test message")
+
+	testCases := []struct {
+		name          string
+		topic         string
+		message       []byte
+		expectedError error
+		on            func(mocks *m)
+		assert        func(t *testing.T, mocks *m)
+	}{
+		{
+			name:          "Successful message delivery",
+			topic:         testTopic,
+			message:       validMessage,
+			expectedError: nil,
+			on: func(mocks *m) {
+				mocks.connector.On("GetProducerConfigMap").
+					Once().
+					Return(configMap)
+
+				mocks.producer.On("Produce", mock.AnythingOfType("*kafka.Message"), mock.Anything).
+					Run(func(args mock.Arguments) {
+						deliveryChan := args.Get(1).(chan kafka.Event)
+						message := &kafka.Message{}
+						go func() {
+							deliveryChan <- message
+						}()
+					}).
+					Once().
+					Return(nil)
+
+				mocks.producer.On("Close").Once().Return()
+
+				mocks.factory.On("NewProducer", configMap).
+					Return(mocks.producer, nil)
+			},
+		},
+		{
+			name:          "Produce message error",
+			topic:         testTopic,
+			message:       validMessage,
+			expectedError: &kafka.Error{},
+			on: func(mocks *m) {
+				mocks.connector.On("GetProducerConfigMap").
+					Once().
+					Return(configMap)
+
+				mocks.producer.On("Produce", mock.AnythingOfType("*kafka.Message"), mock.Anything).
+					Once().
+					Return(kafka.Error{})
+
+				mocks.producer.On("Close").Once().Return()
+
+				mocks.factory.On("NewProducer", configMap).
+					Return(mocks.producer, nil)
+			},
+		},
+		{
+			name:          "Delivery message error",
+			topic:         testTopic,
+			message:       validMessage,
+			expectedError: &kafka.Error{},
+			on: func(mocks *m) {
+				mocks.connector.On("GetProducerConfigMap").
+					Return(configMap)
+
+				mocks.producer.On("Produce", mock.AnythingOfType("*kafka.Message"), mock.Anything).
+					Run(func(args mock.Arguments) {
+						deliveryChan := args.Get(1).(chan kafka.Event)
+						message := &kafka.Message{
+							TopicPartition: kafka.TopicPartition{Error: kafka.NewError(kafka.ErrUnknownTopic, "err", false)},
+						}
+						go func() {
+							deliveryChan <- message
+						}()
+					}).
+					Once().
+					Return(nil)
+
+				mocks.producer.On("Close").
+					Once().
+					Return()
+
+				mocks.factory.On("NewProducer", configMap).
+					Return(mocks.producer, nil)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &m{
+				producer:  adapterMocks.NewProducer(t),
+				factory:   producerMocks.NewKafkaProducerFactory(t),
+				connector: producerMocks.NewKafkaConnector(t),
+			}
+
+			if tc.on != nil {
+				tc.on(m)
+			}
+
+			logger, _ := test.NewNullLogger()
+			logger.ExitFunc = func(i int) {}
+
+			producer := &KafkaProducer{
+				KafkaConnector: m.connector,
+				Logger:         logger,
+				factory:        m.factory,
+			}
+
+			err := producer.SendRawMsg(tc.topic, nil, kafka.PartitionAny, tc.message, []kafka.Header{})
+
+			if tc.expectedError != nil {
+				assert.ErrorAsf(t, err, &tc.expectedError, "Expected error: %v, Actual error: %v", tc.expectedError, err)
+			} else {
+				assert.NoError(t, err, "Expected no errors")
+			}
+
+			if tc.assert != nil {
+				tc.assert(t, m)
+			}
+		})
+	}
+}
+
 func TestKafkaProducer_SetLogger(t *testing.T) {
 	logger, _ := test.NewNullLogger()
 
@@ -258,4 +397,9 @@ func TestKafkaProducer_SetLogger(t *testing.T) {
 
 	assert.Equal(t, consumer.Logger, logger)
 
+}
+
+func TestNewKafkaProducer(t *testing.T) {
+	producer := NewKafkaProducer()
+	assert.NotNil(t, producer)
 }

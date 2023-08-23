@@ -1,7 +1,8 @@
 package consumer
 
 import (
-	adapterMocks "github.com/AeroAgency/go-kafka/adapter/mocks"
+	"github.com/AeroAgency/go-kafka/adapters"
+	adapterMocks "github.com/AeroAgency/go-kafka/adapters/mocks"
 	"github.com/AeroAgency/go-kafka/consumer/mocks"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -21,6 +22,7 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 		factory   *mocks.KafkaConsumerFactory
 		connector *mocks.KafkaConnector
 	}
+	defaultTimeout := 2000000000000
 
 	configMap := &kafka.ConfigMap{}
 	testTopic := "gotest"
@@ -41,7 +43,7 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 		{
 			name:    "Consuming messages without errors",
 			topics:  []string{testTopic},
-			timeout: 1000,
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				messagesSent := 0
 				maxMessagesSent := 20
@@ -83,6 +85,9 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 					Once().
 					Return(nil)
 
+				mocks.consumer.On("String").
+					Return("Mock consumer")
+
 				mocks.message.On("Handle", mock.Anything).
 					Run(func(args mock.Arguments) {
 						if messagesSent == maxMessagesSent {
@@ -96,7 +101,7 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 		{
 			name:    "Consuming nil events",
 			topics:  []string{testTopic},
-			timeout: 1000,
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				messagesSent := 0
 				maxMessagesSent := 20
@@ -132,12 +137,15 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.consumer.On("Close").
 					Once().
 					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:    "Consuming default case events",
 			topics:  []string{testTopic},
-			timeout: 1000,
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				messagesSent := 0
 				maxMessagesSent := 20
@@ -173,12 +181,15 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.consumer.On("Close").
 					Once().
 					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:          "Fatal when NewConsumer produce error",
 			expectedFatal: true,
-			timeout:       1000,
+			timeout:       defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				mocks.connector.On("GetConsumerConfigMap").
 					Once().
@@ -192,7 +203,7 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 		{
 			name:          "Fatal when topics length is zero",
 			expectedFatal: true,
-			timeout:       1000,
+			timeout:       defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				mocks.connector.On("GetConsumerConfigMap").
 					Once().
@@ -201,13 +212,16 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.factory.On("NewConsumer", configMap).
 					Once().
 					Return(mocks.consumer, nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:          "Fatal when subscribe topics produce error",
 			expectedFatal: true,
 			topics:        []string{testTopic},
-			timeout:       1000,
+			timeout:       defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				mocks.connector.On("GetConsumerConfigMap").
 					Once().
@@ -220,13 +234,15 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.consumer.On("SubscribeTopics", mock.Anything, mock.Anything).
 					Once().
 					Return(kafka.NewError(kafka.ErrFail, "fail", true))
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:    "Stop after maxErrorExitCount",
 			topics:  []string{testTopic},
-			timeout: 1000,
-
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				mocks.connector.On("GetConsumerConfigMap").
 					Once().
@@ -255,13 +271,15 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.consumer.On("Close").
 					Once().
 					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:    "Stop after errAllBrokersDown",
 			topics:  []string{testTopic},
-			timeout: 1000,
-
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				mocks.connector.On("GetConsumerConfigMap").
 					Once().
@@ -290,13 +308,15 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 				mocks.consumer.On("Close").
 					Once().
 					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 		{
 			name:    "Reset errorsExitCnt after message consuming",
 			topics:  []string{testTopic},
-			timeout: 1000,
-
+			timeout: defaultTimeout,
 			on: func(mocks *m, doneChannel chan struct{}) {
 				messagesSent := 0
 				errorsSent := 0
@@ -336,6 +356,8 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 					Once().
 					Return(nil)
 
+				mocks.consumer.On("String").Return("Mock consumer")
+
 				mocks.message.On("Handle", mock.Anything).
 					Run(func(args mock.Arguments) {
 						if messagesSent == maxMessagesSent {
@@ -344,6 +366,106 @@ func TestKafkaConsumer_StartConsumer(t *testing.T) {
 					}).
 					Times(messagesSent).
 					Return()
+			},
+		},
+		{
+			name:    "Rebalance callback test",
+			topics:  []string{testTopic},
+			timeout: defaultTimeout,
+			on: func(mocks *m, doneChannel chan struct{}) {
+				mocks.connector.On("GetConsumerConfigMap").
+					Once().
+					Return(configMap)
+
+				mocks.connector.On("GetPollTimeoutMs").
+					Once().
+					Return(pollTimeoutMs)
+
+				mocks.connector.On("GetMaxErrorsExitCount").
+					Once().
+					Return(maxErrorsExitCount)
+
+				mocks.factory.On("NewConsumer", configMap).
+					Once().
+					Return(mocks.consumer, nil)
+
+				mocks.consumer.On("SubscribeTopics", mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						cb := args.Get(1).(adapters.RebalanceCb)
+						err := cb(mocks.consumer, kafka.RevokedPartitions{Partitions: kafka.TopicPartitions{}})
+						assert.NoError(t, err)
+					}).
+					Once().
+					Return(nil)
+
+				mocks.consumer.On("SubscribeTopics", mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						doneChannel <- struct{}{}
+					}).
+					Return(nil)
+
+				mocks.consumer.On("Close").
+					Once().
+					Return(nil)
+
+				mocks.consumer.On("Poll", pollTimeoutMs).
+					Maybe().
+					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
+			},
+		},
+		{
+			name:    "Rebalance callback with error test",
+			topics:  []string{testTopic},
+			timeout: defaultTimeout,
+			on: func(mocks *m, doneChannel chan struct{}) {
+				mocks.connector.On("GetConsumerConfigMap").
+					Once().
+					Return(configMap)
+
+				mocks.connector.On("GetPollTimeoutMs").
+					Once().
+					Return(pollTimeoutMs)
+
+				mocks.connector.On("GetMaxErrorsExitCount").
+					Once().
+					Return(maxErrorsExitCount)
+
+				mocks.factory.On("NewConsumer", configMap).
+					Once().
+					Return(mocks.consumer, nil)
+
+				mocks.consumer.On("SubscribeTopics", mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						cb := args.Get(1).(adapters.RebalanceCb)
+
+						err := cb(mocks.consumer, kafka.RevokedPartitions{Partitions: kafka.TopicPartitions{}})
+						expectedError := kafka.Error{}
+						assert.ErrorAs(t, err, &expectedError)
+						return
+					}).
+					Once().
+					Return(nil)
+
+				mocks.consumer.On("SubscribeTopics", mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						doneChannel <- struct{}{}
+					}).
+					Once().
+					Return(kafka.NewError(kafka.ErrFail, "fail", false))
+
+				mocks.consumer.On("Close").
+					Once().
+					Return(nil)
+
+				mocks.consumer.On("Poll", pollTimeoutMs).
+					Maybe().
+					Return(nil)
+
+				mocks.consumer.On("String").
+					Return("Mock consumer")
 			},
 		},
 	}
@@ -555,4 +677,10 @@ func TestKafkaConsumer_SetLogger(t *testing.T) {
 
 	assert.Equal(t, consumer.Logger, logger)
 
+}
+
+func TestNewKafkaConsumer(t *testing.T) {
+	handler := mocks.NewMessage(t)
+	consumer := NewKafkaConsumer(handler)
+	assert.NotNil(t, consumer)
 }

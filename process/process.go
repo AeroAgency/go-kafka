@@ -2,7 +2,7 @@ package process
 
 import (
 	"fmt"
-	"github.com/AeroAgency/go-kafka/env"
+	"github.com/AeroAgency/golang-helpers-lib/env"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"sync"
@@ -18,7 +18,7 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 	var stopped = false
 	go startServer(wg, &stopped)
 
-	consumerHealthCheckTimeoutMs := env.GetIntOrDefault("CONSUMER_HEALTH_CHECK_TIMEOUT_MS", defaultConsumerHealthCheckTimeoutMs)
+	consumerHealthCheckTimeoutMs := env.GetterInt("CONSUMER_HEALTH_CHECK_TIMEOUT_MS", defaultConsumerHealthCheckTimeoutMs)
 
 	for {
 		select {
@@ -35,7 +35,7 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 func startServer(wg *sync.WaitGroup, stopped *bool) {
 	defer wg.Done()
 	r := setupRouter(stopped)
-	consumerHealthCheckPort := env.GetStringOrDefault("CONSUMER_HEALTH_CHECK_PORT", defaultConsumerHealthCheckPort)
+	consumerHealthCheckPort := env.Getter("CONSUMER_HEALTH_CHECK_PORT", defaultConsumerHealthCheckPort)
 
 	_ = r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
 }

@@ -1,6 +1,8 @@
-package adapter
+package adapters
 
-import "github.com/confluentinc/confluent-kafka-go/kafka"
+import (
+	"github.com/confluentinc/confluent-kafka-go/kafka"
+)
 
 //go:generate go run github.com/vektra/mockery/v2 --name Producer
 type Producer interface {
@@ -10,8 +12,11 @@ type Producer interface {
 
 //go:generate go run github.com/vektra/mockery/v2 --name Consumer
 type Consumer interface {
-	SubscribeTopics(topics []string, rebalanceCb kafka.RebalanceCb) error
+	SubscribeTopics(topics []string, rebalanceCb RebalanceCb) error
 	Poll(timeoutMs int) kafka.Event
 	GetMetadata(topic *string, allTopics bool, timeoutMs int) (*kafka.Metadata, error)
 	Close() error
+	String() string
 }
+
+type RebalanceCb func(Consumer, kafka.Event) error

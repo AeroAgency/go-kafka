@@ -1,7 +1,7 @@
 package connector
 
 import (
-	"github.com/AeroAgency/go-kafka/env"
+	env "github.com/AeroAgency/golang-helpers-lib/env"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
 )
@@ -16,8 +16,8 @@ const (
 	kafkaMaxMessageSizeEnv    = "KAFKA_MESSAGE_MAX_BYTES"
 	kafkaAutoOffsetResetEnv   = "KAFKA_AUTO_OFFSET_RESET"
 	kafkaMaxPollIntervalMsEnv = "KAFKA_MAX_POLL_INTERVAL_MS"
-	TimeoutMsEnv              = "KAFKA_POLL_TIMEOUT_MS"
-	ErrorsExitCountEnv        = "KAFKA_MAX_ERRORS_EXIT_COUNT"
+	kafkaTimeoutMsEnv         = "KAFKA_POLL_TIMEOUT_MS"
+	kafkaErrorsExitCountEnv   = "KAFKA_MAX_ERRORS_EXIT_COUNT"
 )
 
 const (
@@ -71,12 +71,12 @@ func (k *KafkaConnector) GetProducerConfigMap() *kafka.ConfigMap {
 }
 
 func (k *KafkaConnector) getBaseMap() *kafka.ConfigMap {
-	KafkaUrl := env.GetStringOrDefault(kafkaUrlEnv, "")
+	KafkaUrl := env.Getter(kafkaUrlEnv, "")
 	if KafkaUrl == "" {
 		k.Logger.Fatalf(getEnvErrorLog, kafkaUrlEnv)
 	}
 
-	KafkaMaxMessageSize := env.GetIntOrDefault(kafkaMaxMessageSizeEnv, defaultKafkaMaxMessageSize)
+	KafkaMaxMessageSize := env.GetterInt(kafkaMaxMessageSizeEnv, defaultKafkaMaxMessageSize)
 
 	return &kafka.ConfigMap{
 		"metadata.broker.list": KafkaUrl,
@@ -92,8 +92,8 @@ func (k *KafkaConnector) getWithSecurityConfigMap() *kafka.ConfigMap {
 }
 
 func (k *KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
-	KafkaUsername := env.GetStringOrDefault(kafkaUsernameEnv, "")
-	KafkaPassword := env.GetStringOrDefault(kafkaPasswordEnv, "")
+	KafkaUsername := env.Getter(kafkaUsernameEnv, "")
+	KafkaPassword := env.Getter(kafkaPasswordEnv, "")
 
 	if KafkaUsername != "" || KafkaPassword != "" {
 		if KafkaUsername == "" {
@@ -103,12 +103,12 @@ func (k *KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
 			k.Logger.Fatalf(getEnvErrorLog, kafkaPasswordEnv)
 		}
 
-		KafkaSecurityProtocol := env.GetStringOrDefault(kafkaSecurityProtocolEnv, "")
+		KafkaSecurityProtocol := env.Getter(kafkaSecurityProtocolEnv, "")
 		if KafkaSecurityProtocol == "" {
 			k.Logger.Fatalf(getEnvErrorLog, kafkaSecurityProtocolEnv)
 		}
 
-		KafkaSaslMechanism := env.GetStringOrDefault(kafkaSaslMechanismEnv, "")
+		KafkaSaslMechanism := env.Getter(kafkaSaslMechanismEnv, "")
 		if KafkaSaslMechanism == "" {
 			k.Logger.Fatalf(getEnvErrorLog, kafkaSaslMechanismEnv)
 		}
@@ -121,13 +121,13 @@ func (k *KafkaConnector) setSecurityConfigs(configMap *kafka.ConfigMap) {
 }
 
 func (k *KafkaConnector) setConsumerConfigs(configMap *kafka.ConfigMap) {
-	KafkaGroupId := env.GetStringOrDefault(kafkaGroupIdEnv, "")
+	KafkaGroupId := env.Getter(kafkaGroupIdEnv, "")
 	if KafkaGroupId == "" {
 		k.Logger.Fatalf(getEnvErrorLog, kafkaGroupIdEnv)
 	}
 
-	KafkaAutoOffsetReset := env.GetStringOrDefault(kafkaAutoOffsetResetEnv, defaultKafkaAutoOffsetReset)
-	KafkaMaxPollIntervalMs := env.GetIntOrDefault(kafkaMaxPollIntervalMsEnv, defaultKafkaMaxPollIntervalMs)
+	KafkaAutoOffsetReset := env.Getter(kafkaAutoOffsetResetEnv, defaultKafkaAutoOffsetReset)
+	KafkaMaxPollIntervalMs := env.GetterInt(kafkaMaxPollIntervalMsEnv, defaultKafkaMaxPollIntervalMs)
 
 	_ = configMap.SetKey("auto.offset.reset", KafkaAutoOffsetReset)
 	_ = configMap.SetKey("group.id", KafkaGroupId)
@@ -135,13 +135,13 @@ func (k *KafkaConnector) setConsumerConfigs(configMap *kafka.ConfigMap) {
 }
 
 func (k *KafkaConnector) GetPollTimeoutMs() int {
-	timeoutMs := env.GetIntOrDefault(TimeoutMsEnv, defaultTimeoutMs)
+	timeoutMs := env.GetterInt(kafkaTimeoutMsEnv, defaultTimeoutMs)
 
 	return timeoutMs
 }
 
 func (k *KafkaConnector) GetMaxErrorsExitCount() int {
-	errorsExitCount := env.GetIntOrDefault(ErrorsExitCountEnv, defaultErrorsExitCount)
+	errorsExitCount := env.GetterInt(kafkaErrorsExitCountEnv, defaultErrorsExitCount)
 
 	return errorsExitCount
 }

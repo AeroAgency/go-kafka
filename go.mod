@@ -3,6 +3,7 @@ module github.com/AeroAgency/go-kafka
 go 1.13
 
 require (
+	github.com/AeroAgency/golang-helpers-lib v1.2.3
 	github.com/confluentinc/confluent-kafka-go v1.7.0
 	github.com/gin-gonic/gin v1.7.7
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -14,6 +15,7 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.2
+	github.com/vektra/mockery/v2 v2.33.0 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
