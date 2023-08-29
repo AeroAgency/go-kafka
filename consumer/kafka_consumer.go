@@ -1,50 +1,73 @@
 package consumer
 
 import (
-	"os"
-	"os/signal"
-	"strings"
-	"syscall"
-
+	"github.com/AeroAgency/go-kafka/adapters"
+	"github.com/AeroAgency/go-kafka/adapters/confluent"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
+	"os"
+	"os/signal"
+	"syscall"
 
 	connector "github.com/AeroAgency/go-kafka"
 )
 
+// Message Интерфейс работы с сообщениями
+//
+//go:generate go run github.com/vektra/mockery/v2 --name Message
+type Message interface {
+	// Handle Обработать сообщение
+	Handle(msg kafka.Message)
+}
+
+//go:generate go run github.com/vektra/mockery/v2 --name KafkaConnector
+type KafkaConnector interface {
+	SetLogger(logger log.FieldLogger)
+	GetConsumerConfigMap() *kafka.ConfigMap
+	GetMaxErrorsExitCount() int
+	GetPollTimeoutMs() int
+}
+
+//go:generate go run github.com/vektra/mockery/v2 --name KafkaConsumerFactory
+type KafkaConsumerFactory interface {
+	NewConsumer(configMap *kafka.ConfigMap) (adapters.Consumer, error)
+}
+
 type KafkaConsumer struct {
 	Message        Message
-	KafkaConnector connector.KafkaConnector
+	KafkaConnector KafkaConnector
 	Logger         log.FieldLogger
+	factory        KafkaConsumerFactory
 }
 
 func NewKafkaConsumer(message Message) *KafkaConsumer {
 	return &KafkaConsumer{
-		message,
-		*connector.NewKafkaConnector(),
-		log.New(),
+		Message:        message,
+		KafkaConnector: connector.NewKafkaConnector(),
+		Logger:         log.New(),
+		factory:        confluent.KafkaFactory{},
 	}
 }
 
 func (k *KafkaConsumer) SetLogger(logger log.FieldLogger) {
 	k.Logger = logger
-	k.KafkaConnector.Logger = logger
+	k.KafkaConnector.SetLogger(logger)
 }
 
 func (k *KafkaConsumer) StartConsumer(topics ...string) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap(true))
+	c, err := k.factory.NewConsumer(k.KafkaConnector.GetConsumerConfigMap())
 	if err != nil {
 		k.Logger.Fatalf("failed to start consumer: %v", err)
 	}
 	k.Logger.Infof("Created Consumer %v", c)
 	if len(topics) == 0 {
-		k.Logger.Fatalf("failed to start consumer: can't get KAFKA_TOPIC param")
+		k.Logger.Fatalf("failed to start consumer: no topics provided")
 	}
 
-	var rebalanceCb func(c *kafka.Consumer, e kafka.Event) error
-	rebalanceCb = func(c *kafka.Consumer, e kafka.Event) error {
+	var rebalanceCb func(c adapters.Consumer, e kafka.Event) error
+	rebalanceCb = func(c adapters.Consumer, e kafka.Event) error {
 		k.Logger.Infof("Got kafka partition rebalance event %s in %s consumer", e.String(), c.String())
 		switch e.(type) {
 		case kafka.RevokedPartitions:
@@ -61,55 +84,68 @@ func (k *KafkaConsumer) StartConsumer(topics ...string) {
 	if err != nil {
 		k.Logger.Fatalf("failed to subscribe topic: %v", err)
 	}
-	run := true
 	timeoutMs := k.KafkaConnector.GetPollTimeoutMs()
 	errorsExitCntBase := k.KafkaConnector.GetMaxErrorsExitCount()
 	errorsExitCnt := errorsExitCntBase
 
-	for run == true {
+	defer func() {
+		k.Logger.Infof("Closing consumer %v", c)
+		_ = c.Close()
+	}()
+
+	for {
 		select {
 		case sig := <-sigchan:
 			k.Logger.Infof("Caught signal %v: terminating", sig)
-			run = false
+			return
 		default:
 			ev := c.Poll(timeoutMs)
 			if ev == nil {
 				continue
 			}
-			switch e := ev.(type) {
-			case *kafka.Message:
+			err := k.handleEvent(ev)
+			if err == nil {
 				errorsExitCnt = errorsExitCntBase
-				k.Logger.Debugf("Message on topic %s, partition: %s: %s", strings.Join(topics, ", "), e.TopicPartition, string(e.Value))
-				if e.Headers != nil {
-					k.Logger.Debugf("Headers: %+v", e.Headers)
+			} else {
+				errorsExitCnt = k.handleErr(err, errorsExitCnt)
+
+				if errorsExitCntBase > 0 && errorsExitCnt <= 0 {
+					k.Logger.Errorf("Stop consuming with error: %+v", err)
+					return
 				}
-				k.Message.Handle(*e)
-			case kafka.Error:
-				if e.Code() == kafka.ErrAllBrokersDown {
-					run = false
-				} else if errorsExitCntBase > 0 {
-					errorsExitCnt--
-					if errorsExitCnt == 0 {
-						run = false
-					}
-				}
-				if !run {
-					k.Logger.Errorf("Stop consuming with error: %+v", e)
-				} else {
-					k.Logger.Errorf("Continue consuming with error: %+v", e)
-				}
-			default:
-				k.Logger.Infof("Ignored %+v", e)
+				k.Logger.Errorf("Continue consuming with error: %+v", err)
 			}
 		}
 	}
+}
 
-	k.Logger.Infof("Closing consumer %v", c)
-	_ = c.Close()
+func (k *KafkaConsumer) handleEvent(ev kafka.Event) *kafka.Error {
+	switch e := ev.(type) {
+	case *kafka.Message:
+		k.Logger.Debugf("Message on topic %s, partition: %s: %s", e.TopicPartition.Topic, e.TopicPartition, string(e.Value))
+		if e.Headers != nil {
+			k.Logger.Debugf("Headers: %+v", e.Headers)
+		}
+		k.Message.Handle(*e)
+	case kafka.Error:
+		return &e
+	default:
+		k.Logger.Infof("Ignored %+v", e)
+	}
+	return nil
+}
+
+func (k *KafkaConsumer) handleErr(err *kafka.Error, errorsExitCnt int) int {
+	if err.Code() == kafka.ErrAllBrokersDown {
+		return 0
+	}
+
+	errorsExitCnt--
+	return errorsExitCnt
 }
 
 func (k *KafkaConsumer) CheckConsumer() (int, error) {
-	c, err := kafka.NewConsumer(k.KafkaConnector.GetConfigMap(true))
+	c, err := k.factory.NewConsumer(k.KafkaConnector.GetConsumerConfigMap())
 	if err != nil {
 		k.Logger.Fatalf("failed to start consumer: %v", err)
 		return 0, err
@@ -123,5 +159,5 @@ func (k *KafkaConsumer) CheckConsumer() (int, error) {
 	}
 
 	c.Close()
-	return topicLen, err
+	return topicLen, nil
 }

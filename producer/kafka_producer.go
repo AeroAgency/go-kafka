@@ -3,29 +3,44 @@ package producer
 import (
 	"encoding/json"
 	connector "github.com/AeroAgency/go-kafka"
+	"github.com/AeroAgency/go-kafka/adapters"
+	"github.com/AeroAgency/go-kafka/adapters/confluent"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	log "github.com/sirupsen/logrus"
 )
 
+//go:generate go run github.com/vektra/mockery/v2 --name KafkaConnector
+type KafkaConnector interface {
+	SetLogger(logger log.FieldLogger)
+	GetProducerConfigMap() *kafka.ConfigMap
+}
+
+//go:generate go run github.com/vektra/mockery/v2 --name KafkaProducerFactory
+type KafkaProducerFactory interface {
+	NewProducer(configMap *kafka.ConfigMap) (adapters.Producer, error)
+}
+
 type KafkaProducer struct {
-	KafkaConnector connector.KafkaConnector
+	KafkaConnector KafkaConnector
 	Logger         log.FieldLogger
+	factory        KafkaProducerFactory
 }
 
 func NewKafkaProducer() *KafkaProducer {
 	return &KafkaProducer{
-		*connector.NewKafkaConnector(),
+		connector.NewKafkaConnector(),
 		log.New(),
+		confluent.KafkaFactory{},
 	}
 }
 
 func (k *KafkaProducer) SetLogger(logger log.FieldLogger) {
 	k.Logger = logger
-	k.KafkaConnector.Logger = logger
+	k.KafkaConnector.SetLogger(logger)
 }
 
-func (k *KafkaProducer) CreateProducer() *kafka.Producer {
-	p, err := kafka.NewProducer(k.KafkaConnector.GetConfigMap(false))
+func (k *KafkaProducer) CreateProducer() adapters.Producer {
+	p, err := k.factory.NewProducer(k.KafkaConnector.GetProducerConfigMap())
 	if err != nil {
 		k.Logger.Fatalf("Kafka Producer: Failed to create producer: %s", err)
 	}
@@ -44,34 +59,15 @@ func (k *KafkaProducer) SendMessage(topic string, value interface{}) error {
 }
 
 func (k *KafkaProducer) SendRawMessage(topic string, message []byte, headers []kafka.Header) error {
-	p := k.CreateProducer()
-	deliveryChan := make(chan kafka.Event)
-	defer close(deliveryChan)
-	defer p.Close()
-
-	err := p.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-		Value:          message,
-		Headers:        headers,
-	}, deliveryChan)
-
-	if err != nil {
-		k.Logger.Errorf("Kafka Producer: send message error: %s", err)
-		return err
-	}
-	e := <-deliveryChan
-	m := e.(*kafka.Message)
-
-	if m.TopicPartition.Error != nil {
-		k.Logger.Errorf("Kafka Producer: Delivery failed: %v", m.TopicPartition.Error)
-		return m.TopicPartition.Error
-	}
-
-	return nil
+	return k.sendRawMessage(topic, nil, kafka.PartitionAny, message, headers)
 }
 
 func (k *KafkaProducer) SendRawMsg(topic string, key []byte, partition int32, message []byte, headers []kafka.Header) error {
-	p := k.CreateProducer()
+	return k.sendRawMessage(topic, key, partition, message, headers)
+}
+
+func (k *KafkaProducer) sendRawMessage(topic string, key []byte, partition int32, message []byte, headers []kafka.Header) error {
+	p := k.CreateProducer() //todo: need to create producer for every message?
 	deliveryChan := make(chan kafka.Event)
 	defer close(deliveryChan)
 	defer p.Close()

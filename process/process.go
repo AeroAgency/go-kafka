@@ -2,43 +2,23 @@ package process
 
 import (
 	"fmt"
+	"github.com/AeroAgency/golang-helpers-lib/env"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 )
 
-var stopped = false
+const (
+	defaultConsumerHealthCheckPort      = "8081"
+	defaultConsumerHealthCheckTimeoutMs = 2000
+)
 
 func RunRest(stop chan bool, wg *sync.WaitGroup) {
-	go func() {
-		defer wg.Done()
-		r := gin.Default()
-		r.GET("/healthProcess", func(c *gin.Context) {
-			if stopped {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"status": "fail",
-				})
-			} else {
-				c.JSON(http.StatusOK, gin.H{
-					"status": "ok",
-				})
-			}
-		})
-		consumerHealthCheckPort, ok := os.LookupEnv("CONSUMER_HEALTH_CHECK_PORT")
-		if !ok {
-			consumerHealthCheckPort = "8081"
-		}
-		_ = r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
-	}()
+	var stopped = false
+	go startServer(wg, &stopped)
 
-	consumerHealthCheckTimeout, ok := os.LookupEnv("CONSUMER_HEALTH_CHECK_TIMEOUT_MS")
-	if !ok {
-		consumerHealthCheckTimeout = "2000"
-	}
-	consumerHealthCheckTimeoutMs, _ := strconv.Atoi(consumerHealthCheckTimeout)
+	consumerHealthCheckTimeoutMs := env.GetterInt("CONSUMER_HEALTH_CHECK_TIMEOUT_MS", defaultConsumerHealthCheckTimeoutMs)
 
 	for {
 		select {
@@ -51,6 +31,32 @@ func RunRest(stop chan bool, wg *sync.WaitGroup) {
 		}
 	}
 }
+
+func startServer(wg *sync.WaitGroup, stopped *bool) {
+	defer wg.Done()
+	r := setupRouter(stopped)
+	consumerHealthCheckPort := env.Getter("CONSUMER_HEALTH_CHECK_PORT", defaultConsumerHealthCheckPort)
+
+	_ = r.Run(fmt.Sprintf(":%s", consumerHealthCheckPort))
+}
+
+func setupRouter(stopped *bool) *gin.Engine {
+	r := gin.Default()
+	r.GET("/healthProcess", func(c *gin.Context) {
+		if *stopped {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "fail",
+			})
+		} else {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "ok",
+			})
+		}
+	})
+
+	return r
+}
+
 func RecoverRunProc(stop chan bool) {
 	if err := recover(); err != nil {
 		stop <- true
